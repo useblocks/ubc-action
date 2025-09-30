@@ -1,0 +1,114 @@
+# action.yml
+
+# Metadata for the GitHub Action.
+# This information is displayed in the GitHub Marketplace and helps users understand the action's purpose.
+name: 'ubc'
+description: 'Downloads and installs a specific version of the ubc CLI tool and adds it to the PATH.'
+author: 'useblocks'
+
+# Defines the input parameters that users can pass to the action from their workflow files.
+# This allows for flexible and configurable behavior.
+inputs:
+  command:
+    description: 'The ubc command to execute (e.g., check, format, build).'
+    required: true
+    default: 'check'
+  args:
+    description: 'A string of arguments and options to pass to the ubc command.'
+    required: false
+    default: ''
+  ubc-version:
+    description: 'The version of the ubc CLI to install (e.g., 0.19.0). Use "latest" for the latest version.'
+    required: false
+    default: '0.19.0' # Pinning to a known stable version by default is a best practice.
+  license-key:
+    description: 'The ubCode license key. Recommended to be passed via secrets.'
+    required: false
+  license-user:
+    description: 'The ubCode license user. Recommended to be passed via secrets.'
+    required: false
+
+# The core logic of the action, specifying that it is a composite action.
+runs:
+  using: 'composite'
+  steps:
+    # Step 1: Set up environment variables for platform detection and URL construction.
+    # This step normalizes the runner context values for use in the download URL.
+    - name: Prepare Environment
+      id: prep
+      shell: bash
+      run: |
+        # Normalize OS name from GitHub's context (Linux, Windows, macOS) to ubc's naming convention (linux, windows, darwin).
+        OS_LOWER=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+        if [ "$OS_LOWER" = "macos" ]; then
+          OS_LOWER="darwin"
+        fi
+        echo "UBC_OS=$OS_LOWER" >> $GITHUB_ENV
+
+        # Normalize architecture from GitHub's context (X64, ARM64) to ubc's naming convention (x64, arm64).
+        ARCH_LOWER=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+        echo "UBC_ARCH=$ARCH_LOWER" >> $GITHUB_ENV
+
+        # Set the binary name based on the OS. Windows binaries have a.exe extension.
+        BIN_EXT=""
+        if [ "$OS_LOWER" = "windows" ]; then
+          BIN_EXT=".exe"
+        fi
+        echo "BIN_EXT=$BIN_EXT" >> $GITHUB_ENV
+
+    # Step 2: Download the ubc binary for Linux and macOS.
+    # This step only runs on non-Windows runners.
+    - name: Download ubc (Linux/macOS)
+      if: runner.os == 'Linux' || runner.os == 'macOS'
+      shell: bash
+      run: |
+        VERSION="${{ inputs.ubc-version }}"
+        # Construct the download URL dynamically.
+        URL="https://download.useblocks.com/ubc/${VERSION}/ubc-${UBC_OS}-${UBC_ARCH}-${VERSION}${BIN_EXT}"
+        echo "Downloading from ${URL}"
+        # Use curl to download the file and save it as 'ubc'.
+        curl -sSL -o ubc "${URL}"
+
+    # Step 3: Download the ubc binary for Windows.
+    # This step only runs on Windows runners, using PowerShell.
+    - name: Download ubc (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $version = "${{ inputs.ubc-version }}"
+        # Construct the download URL dynamically.
+        $url = "https://download.useblocks.com/ubc/$version/ubc-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}-$version${{ env.BIN_EXT }}"
+        Write-Host "Downloading from $url"
+        # Use Invoke-WebRequest to download the file and save it as 'ubc.exe'.
+        Invoke-WebRequest -Uri $url -OutFile "ubc.exe"
+
+    # Step 4: Make the binary executable on Linux and macOS.
+    # This is a required step on Unix-like systems.
+    - name: Set Executable Permissions (Linux/macOS)
+      if: runner.os == 'Linux' || runner.os == 'macOS'
+      shell: bash
+      run: chmod +x ubc
+
+    # Step 5: Add the ubc binary to the system PATH.
+    # This makes the 'ubc' command available in subsequent steps of the job.
+    # ${{ github.action_path }} is the absolute path to the directory containing this action.yml file.
+    - name: Add ubc to PATH
+      shell: bash
+      run: echo "${{ github.action_path }}" >> $GITHUB_PATH
+
+    # Step 6: Verify the installation by checking the version.
+    # This provides immediate feedback that the installation was successful.
+    - name: Verify ubc installation
+      shell: bash
+      run: ubc --version
+
+    # Step 7: Execute the user-specified ubc command.
+    # This is the main purpose of the action. It combines the command and args inputs.
+    # License information is passed as environment variables, which ubc can read.
+    - name: Run ubc command
+      shell: bash
+      env:
+        UBCODE_LICENSE_KEY: ${{ inputs.license-key }}
+        UBCODE_LICENSE_USER: ${{ inputs.license-user }}
+      run: |
+        ubc ${{ inputs.command }} ${{ inputs.args }}

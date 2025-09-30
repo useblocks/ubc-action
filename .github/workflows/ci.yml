@@ -1,0 +1,27 @@
+---
+name: Workflow for ubc action
+on: [push, pull_request]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+        with:
+          submodules: "true"
+
+      - name: Test action with default settings
+        uses: ./
+        with:
+          # default command is 'check' so we just pass --help to verify installation
+          # needs to print the check help message to stdout w/o errors
+          args: --help
+
+      - name: Verify UBC is installed
+        run: |
+          which ubc
+          ubc --version
