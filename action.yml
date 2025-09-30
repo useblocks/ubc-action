@@ -56,30 +56,58 @@ runs:
         fi
         echo "BIN_EXT=$BIN_EXT" >> $GITHUB_ENV
 
-    # Step 2: Check cache for UBC binary
+    # Step 2: Check if UBC is already installed
+    # This step checks if UBC is already available in the system PATH and has the correct version
+    - name: Check existing UBC installation
+      id: check-existing
+      shell: bash
+      run: |
+        if command -v ubc >/dev/null 2>&1; then
+          INSTALLED_VERSION=$(ubc --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+          REQUESTED_VERSION="${{ inputs.ubc-version }}"
+          
+          echo "Found UBC installation with version: $INSTALLED_VERSION"
+          
+          if [ "$REQUESTED_VERSION" = "latest" ] || [ "$INSTALLED_VERSION" = "$REQUESTED_VERSION" ]; then
+            echo "✓ UBC $INSTALLED_VERSION is already installed and matches requirements"
+            echo "ubc-exists=true" >> $GITHUB_OUTPUT
+            echo "installed-version=$INSTALLED_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "⚠ UBC $INSTALLED_VERSION is installed but version $REQUESTED_VERSION was requested"
+            echo "ubc-exists=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "UBC not found in PATH"
+          echo "ubc-exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    # Step 3: Check cache for UBC binary (only if not already installed)
     # This step checks if we already have the UBC binary cached for this version and platform
     - name: Cache UBC binary
       id: cache-ubc
+      if: steps.check-existing.outputs.ubc-exists != 'true'
       uses: actions/cache@v4
       with:
         path: ubc${{ env.BIN_EXT }}
         key: ubc-${{ inputs.ubc-version }}-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}
 
-    # Step 2.1: Show cache status
-    # This provides feedback about whether the binary was found in cache or needs to be downloaded
-    - name: Check cache status
+    # Step 3.1: Show installation status
+    # This provides feedback about the installation method being used
+    - name: Show installation status
       shell: bash
       run: |
-        if [ "${{ steps.cache-ubc.outputs.cache-hit }}" = "true" ]; then
+        if [ "${{ steps.check-existing.outputs.ubc-exists }}" = "true" ]; then
+          echo "✓ Using existing UBC installation (version: ${{ steps.check-existing.outputs.installed-version }})"
+        elif [ "${{ steps.cache-ubc.outputs.cache-hit }}" = "true" ]; then
           echo "✓ UBC binary found in cache"
         else
-          echo "⬇ UBC binary not found in cache, will download"
+          echo "⬇ UBC binary not found, will download"
         fi
 
-    # Step 3: Download the ubc binary for Linux and macOS (only if not cached).
-    # This step only runs on non-Windows runners and when cache miss occurs.
+    # Step 4: Download the ubc binary for Linux and macOS (only if not already installed and not cached).
+    # This step only runs on non-Windows runners when UBC is not already installed and cache miss occurs.
     - name: Download ubc (Linux/macOS)
-      if: (runner.os == 'Linux' || runner.os == 'macOS') && steps.cache-ubc.outputs.cache-hit != 'true'
+      if: (runner.os == 'Linux' || runner.os == 'macOS') && steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
       shell: bash
       run: |
         VERSION="${{ inputs.ubc-version }}"
@@ -89,10 +117,10 @@ runs:
         # Use curl to download the file and save it as 'ubc'.
         curl -sSL -o ubc "${URL}"
 
-    # Step 4: Download the ubc binary for Windows (only if not cached).
-    # This step only runs on Windows runners and when cache miss occurs, using PowerShell.
+    # Step 5: Download the ubc binary for Windows (only if not already installed and not cached).
+    # This step only runs on Windows runners when UBC is not already installed and cache miss occurs, using PowerShell.
     - name: Download ubc (Windows)
-      if: runner.os == 'Windows' && steps.cache-ubc.outputs.cache-hit != 'true'
+      if: runner.os == 'Windows' && steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         $version = "${{ inputs.ubc-version }}"
@@ -102,27 +130,28 @@ runs:
         # Use Invoke-WebRequest to download the file and save it as 'ubc.exe'.
         Invoke-WebRequest -Uri $url -OutFile "ubc.exe"
 
-    # Step 5: Make the binary executable on Linux and macOS.
-    # This is a required step on Unix-like systems.
+    # Step 6: Make the binary executable on Linux and macOS (only if downloaded).
+    # This is a required step on Unix-like systems when we downloaded or restored from cache.
     - name: Set Executable Permissions (Linux/macOS)
-      if: runner.os == 'Linux' || runner.os == 'macOS'
+      if: (runner.os == 'Linux' || runner.os == 'macOS') && steps.check-existing.outputs.ubc-exists != 'true'
       shell: bash
       run: chmod +x ubc
 
-    # Step 6: Add the ubc binary to the system PATH.
+    # Step 7: Add the ubc binary to the system PATH (only if downloaded).
     # This makes the 'ubc' command available in subsequent steps of the job.
     # ${{ github.action_path }} is the absolute path to the directory containing this action.yml file.
     - name: Add ubc to PATH
+      if: steps.check-existing.outputs.ubc-exists != 'true'
       shell: bash
       run: echo "${{ github.action_path }}" >> $GITHUB_PATH
 
-    # Step 7: Verify the installation by checking the version.
+    # Step 8: Verify the installation by checking the version.
     # This provides immediate feedback that the installation was successful.
     - name: Verify ubc installation
       shell: bash
       run: ubc --version
 
-    # Step 8: Execute the user-specified ubc command.
+    # Step 9: Execute the user-specified ubc command.
     # This is the main purpose of the action. It combines the command and args inputs.
     # License information is passed as environment variables, which ubc can read.
     - name: Run ubc command
