@@ -158,7 +158,8 @@ runs:
     # Step 9: Execute the user-specified ubc command.
     # This is the main purpose of the action. It combines the command and args inputs.
     # License information is passed as environment variables, which ubc can read.
-    # Run in working directory if user specified a working directory.
+    # Run in working directory if user specified a working directory, containing e.g. the 
+    # ubproject.toml file
     - name: Run ubc command
       shell: bash
       working-directory: ${{ inputs.working-directory }}
