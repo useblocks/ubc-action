@@ -27,6 +27,10 @@ inputs:
   license-user:
     description: 'The ubCode license user. Recommended to be passed via secrets.'
     required: false
+  working-directory:
+    description: 'The working directory to run the ubc command in. Defaults to the root of the repository.'
+    required: false
+    default: '.'
 
 # The core logic of the action, specifying that it is a composite action.
 runs:
@@ -154,8 +158,10 @@ runs:
     # Step 9: Execute the user-specified ubc command.
     # This is the main purpose of the action. It combines the command and args inputs.
     # License information is passed as environment variables, which ubc can read.
+    # Run in working directory if user specified a working directory.
     - name: Run ubc command
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
         UBCODE_LICENSE_KEY: ${{ inputs.license-key }}
         UBCODE_LICENSE_USER: ${{ inputs.license-user }}
