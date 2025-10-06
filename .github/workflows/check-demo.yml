@@ -15,11 +15,12 @@ jobs:
         with:
           submodules: "true"
 
-      - name: Test action with default settings
+      - name: Setup ubc
         uses: ./
         with:
-          command: check
-          args: .
           license-key: ${{ secrets.UBC_LICENSE_KEY }}
           license-user: ${{ secrets.UBC_LICENSE_USER }}
-          working-directory: ./demo
+
+      - name: Test action with default settings
+        working-directory: ./demo
+        run: ubc check .

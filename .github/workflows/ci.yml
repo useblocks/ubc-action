@@ -14,14 +14,8 @@ jobs:
         with:
           submodules: "true"
 
-      - name: Test action with default settings
+      - name: Setup ubc
         uses: ./
-        with:
-          # default command is 'check' so we just pass --help to verify installation
-          # needs to print the check help message to stdout w/o errors
-          args: --help
 
-      - name: Verify UBC is installed
-        run: |
-          which ubc
-          ubc --version
+      - name: Verify ubc is installed
+        run: ubc --version

@@ -1,7 +1,7 @@
-Ubcode Example Project
+ubCode Example Project
 ======================
 
-This is a simple example project that demonstrates how to use the ubcode.
+This is an example project that demonstrates how to use ``ubc``.
 
 .. req:: An example requirement
     :id: REQ123

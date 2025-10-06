@@ -9,15 +9,7 @@ author: 'useblocks'
 # Defines the input parameters that users can pass to the action from their workflow files.
 # This allows for flexible and configurable behavior.
 inputs:
-  command:
-    description: 'The ubc command to execute (e.g., check, format, build).'
-    required: true
-    default: 'check'
-  args:
-    description: 'A string of arguments and options to pass to the ubc command.'
-    required: false
-    default: ''
-  ubc-version:
+  version:
     description: 'The version of the ubc CLI to install (e.g., 0.19.0). Use "latest" for the latest version.'
     required: false
     default: '0.19.0' # Pinning to a known stable version by default is a best practice.
@@ -28,9 +20,9 @@ inputs:
     description: 'The ubCode license user. Recommended to be passed via secrets.'
     required: false
   working-directory:
-    description: 'The working directory to run the ubc command in. Defaults to the root of the repository.'
+    description: 'The working directory to run the ubc command in. Defaults to the current directory.'
     required: false
-    default: '.'
+    default: '${{ github.workspace}}'
 
 # The core logic of the action, specifying that it is a composite action.
 runs:
@@ -68,7 +60,7 @@ runs:
       run: |
         if command -v ubc >/dev/null 2>&1; then
           INSTALLED_VERSION=$(ubc --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
-          REQUESTED_VERSION="${{ inputs.ubc-version }}"
+          REQUESTED_VERSION="${{ inputs.version }}"
           
           echo "Found UBC installation with version: $INSTALLED_VERSION"
           
@@ -93,7 +85,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ubc${{ env.BIN_EXT }}
-        key: ubc-${{ inputs.ubc-version }}-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}
+        key: ubc-${{ inputs.version }}-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}
 
     # Step 3.1: Show installation status
     # This provides feedback about the installation method being used
@@ -114,7 +106,7 @@ runs:
       if: (runner.os == 'Linux' || runner.os == 'macOS') && steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        VERSION="${{ inputs.ubc-version }}"
+        VERSION="${{ inputs.version }}"
         # Construct the download URL dynamically.
         URL="https://download.useblocks.com/ubc/${VERSION}/ubc-${UBC_OS}-${UBC_ARCH}-${VERSION}${BIN_EXT}"
         echo "Downloading from ${URL}"
@@ -127,7 +119,7 @@ runs:
       if: runner.os == 'Windows' && steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
-        $version = "${{ inputs.ubc-version }}"
+        $version = "${{ inputs.version }}"
         # Construct the download URL dynamically.
         $url = "https://download.useblocks.com/ubc/$version/ubc-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}-$version${{ env.BIN_EXT }}"
         Write-Host "Downloading from $url"
@@ -149,22 +141,22 @@ runs:
       shell: bash
       run: echo "${{ github.action_path }}" >> $GITHUB_PATH
 
-    # Step 8: Verify the installation by checking the version.
+    # Step 8: Export license environment variables for subsequent steps
+    # This makes the license available to any `ubc` command run later in the job.
+    - name: Export license environment variables
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.license-key }}" ]; then
+          echo "UBCODE_LICENSE_KEY=${{ inputs.license-key }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ inputs.license-user }}" ]; then
+          echo "UBCODE_LICENSE_USER=${{ inputs.license-user }}" >> $GITHUB_ENV
+        fi
+
+    # Step 9: Verify the installation by checking the version.
     # This provides immediate feedback that the installation was successful.
     - name: Verify ubc installation
       shell: bash
       run: ubc --version
 
-    # Step 9: Execute the user-specified ubc command.
-    # This is the main purpose of the action. It combines the command and args inputs.
-    # License information is passed as environment variables, which ubc can read.
-    # Run in working directory if user specified a working directory, containing e.g. the 
-    # ubproject.toml file
-    - name: Run ubc command
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      env:
-        UBCODE_LICENSE_KEY: ${{ inputs.license-key }}
-        UBCODE_LICENSE_USER: ${{ inputs.license-user }}
-      run: |
-        ubc ${{ inputs.command }} ${{ inputs.args }}
+

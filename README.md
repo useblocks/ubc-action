@@ -13,12 +13,10 @@ The following inputs can be used to configure the action:
 
 | Input               | Description                                                                          | Default     | Required |
 | ------------------- | ------------------------------------------------------------------------------------ | ----------- | -------- |
-| `command`           | The `ubc` command to execute (e.g., `check`, `format`, `build`).                       | `check`     | Yes      |
-| `args`              | A string of arguments and options to pass to the `ubc` command.                        | `''`        | No       |
-| `ubc-version`       | The version of the `ubc` CLI to install. Use `latest` for the latest version.          | `0.19.0`    | No       |
-| `license-key`       | The ubCode license key. Recommended to be passed via secrets.                          | `''`        | No       |
-| `license-user`      | The ubCode license user. Recommended to be passed via secrets.                         | `''`        | No       |
-| `working-directory` | The working directory to run the `ubc` command in. Defaults to the repository root.    | `.`         | No       |
+| `version`           | The version of the `ubc` CLI to install. Use `latest` for the latest version.        | `0.19.0`    | No       |
+| `license-key`       | The ubCode license key. Recommended to be passed via secrets.                        | `''`        | No       |
+| `license-user`      | The ubCode license user. Recommended to be passed via secrets.                       | `''`        | No       |
+| `working-directory` | The working directory to run the `ubc` command in. Defaults to the repository root.  | `.`         | No       |
 
 Note: For private projects setting `license-key` and `license-user` is required.
 
@@ -27,25 +25,32 @@ Note: For private projects setting `license-key` and `license-user` is required.
 Here is an example of how to use the `ubc-action` in your workflow to run `ubc check` on a project located in the `demo` directory.
 
 ```yaml
-# filepath: .github/workflows/main.yml
-name: Check Project with ubc
+# filepath: .github/workflows/check-demo.yml
+name: Check demo project with ubc action
 on: [push, pull_request]
-
+permissions:
+  id-token: write
+  contents: read
 jobs:
+
   check:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Run ubc check
-        uses: useblocks/ubc-action@v1
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
         with:
-          command: check
-          args: .
+          submodules: "true"
+
+      - name: Setup ubc
+        uses: ./
+        with:
           license-key: ${{ secrets.UBC_LICENSE_KEY }}
           license-user: ${{ secrets.UBC_LICENSE_USER }}
-          working-directory: ./demo
+
+      - name: Test action with default settings
+        working-directory: ./demo
+        run: ubc check .
 ```
 
 ## License
