@@ -23,36 +23,42 @@ inputs:
     description: 'The working directory to run the ubc command in. Defaults to the current directory.'
     required: false
     default: '${{ github.workspace}}'
+  args:
+    description: 'Arguments to pass to the ubc command. If provided, ubc will be executed with these arguments.'
+    required: false
 
 # The core logic of the action, specifying that it is a composite action.
 runs:
   using: 'composite'
   steps:
-    # Step 1: Set up environment variables for platform detection and URL construction.
+    # Step 1: Check OS compatibility
+    # This action only supports Linux.
+    - name: Check OS compatibility
+      shell: bash
+      run: |
+        if [ "${{ runner.os }}" != "Linux" ]; then
+          echo "::error::This action only supports Linux. ${{ runner.os }} is not supported."
+          exit 1
+        fi
+
+    # Step 2: Set up environment variables for platform detection and URL construction.
     # This step normalizes the runner context values for use in the download URL.
     - name: Prepare Environment
       id: prep
       shell: bash
       run: |
-        # Normalize OS name from GitHub's context (Linux, Windows, macOS) to ubc's naming convention (linux, windows, darwin).
+        # Normalize OS name from GitHub's context (Linux) to ubc's naming convention (linux).
         OS_LOWER=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-        if [ "$OS_LOWER" = "macos" ]; then
-          OS_LOWER="darwin"
-        fi
         echo "UBC_OS=$OS_LOWER" >> $GITHUB_ENV
 
         # Normalize architecture from GitHub's context (X64, ARM64) to ubc's naming convention (x64, arm64).
         ARCH_LOWER=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
         echo "UBC_ARCH=$ARCH_LOWER" >> $GITHUB_ENV
 
-        # Set the binary name based on the OS. Windows binaries have a.exe extension.
-        BIN_EXT=""
-        if [ "$OS_LOWER" = "windows" ]; then
-          BIN_EXT=".exe"
-        fi
-        echo "BIN_EXT=$BIN_EXT" >> $GITHUB_ENV
+        # Set the binary name. On Linux, there is no extension.
+        echo "BIN_EXT=" >> $GITHUB_ENV
 
-    # Step 2: Check if UBC is already installed
+    # Step 3: Check if UBC is already installed
     # This step checks if UBC is already available in the system PATH and has the correct version
     - name: Check existing UBC installation
       id: check-existing
@@ -77,7 +83,7 @@ runs:
           echo "ubc-exists=false" >> $GITHUB_OUTPUT
         fi
 
-    # Step 3: Check cache for UBC binary (only if not already installed)
+    # Step 4: Check cache for UBC binary (only if not already installed)
     # This step checks if we already have the UBC binary cached for this version and platform
     - name: Cache UBC binary
       id: cache-ubc
@@ -87,7 +93,7 @@ runs:
         path: ubc${{ env.BIN_EXT }}
         key: ubc-${{ inputs.version }}-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}
 
-    # Step 3.1: Show installation status
+    # Step 5: Show installation status
     # This provides feedback about the installation method being used
     - name: Show installation status
       shell: bash
@@ -100,10 +106,10 @@ runs:
           echo "⬇ UBC binary not found, will download"
         fi
 
-    # Step 4: Download the ubc binary for Linux and macOS (only if not already installed and not cached).
-    # This step only runs on non-Windows runners when UBC is not already installed and cache miss occurs.
-    - name: Download ubc (Linux/macOS)
-      if: (runner.os == 'Linux' || runner.os == 'macOS') && steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
+    # Step 6: Download the ubc binary for Linux (only if not already installed and not cached).
+    # This step only runs on Linux runners when UBC is not already installed and cache miss occurs.
+    - name: Download ubc (Linux)
+      if: steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
       shell: bash
       run: |
         VERSION="${{ inputs.version }}"
@@ -113,27 +119,14 @@ runs:
         # Use curl to download the file and save it as 'ubc'.
         curl -sSL -o ubc "${URL}"
 
-    # Step 5: Download the ubc binary for Windows (only if not already installed and not cached).
-    # This step only runs on Windows runners when UBC is not already installed and cache miss occurs, using PowerShell.
-    - name: Download ubc (Windows)
-      if: runner.os == 'Windows' && steps.check-existing.outputs.ubc-exists != 'true' && steps.cache-ubc.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: |
-        $version = "${{ inputs.version }}"
-        # Construct the download URL dynamically.
-        $url = "https://download.useblocks.com/ubc/$version/ubc-${{ env.UBC_OS }}-${{ env.UBC_ARCH }}-$version${{ env.BIN_EXT }}"
-        Write-Host "Downloading from $url"
-        # Use Invoke-WebRequest to download the file and save it as 'ubc.exe'.
-        Invoke-WebRequest -Uri $url -OutFile "ubc.exe"
-
-    # Step 6: Make the binary executable on Linux and macOS (only if downloaded).
+    # Step 7: Make the binary executable on Linux (only if downloaded).
     # This is a required step on Unix-like systems when we downloaded or restored from cache.
-    - name: Set Executable Permissions (Linux/macOS)
-      if: (runner.os == 'Linux' || runner.os == 'macOS') && steps.check-existing.outputs.ubc-exists != 'true'
+    - name: Set Executable Permissions (Linux)
+      if: steps.check-existing.outputs.ubc-exists != 'true'
       shell: bash
       run: chmod +x ubc
 
-    # Step 7: Add the ubc binary to the system PATH (only if downloaded).
+    # Step 8: Add the ubc binary to the system PATH (only if downloaded).
     # This makes the 'ubc' command available in subsequent steps of the job.
     # ${{ github.action_path }} is the absolute path to the directory containing this action.yml file.
     - name: Add ubc to PATH
@@ -141,7 +134,7 @@ runs:
       shell: bash
       run: echo "${{ github.action_path }}" >> $GITHUB_PATH
 
-    # Step 8: Export license environment variables for subsequent steps
+    # Step 9: Export license environment variables for subsequent steps
     # This makes the license available to any `ubc` command run later in the job.
     - name: Export license environment variables
       shell: bash
@@ -153,10 +146,17 @@ runs:
           echo "UBCODE_LICENSE_USER=${{ inputs.license-user }}" >> $GITHUB_ENV
         fi
 
-    # Step 9: Verify the installation by checking the version.
+    # Step 10: Verify the installation by checking the version.
     # This provides immediate feedback that the installation was successful.
     - name: Verify ubc installation
       shell: bash
       run: ubc --version
+
+    # Step 11: Run ubc command if args are provided
+    - name: Run ubc command
+      if: inputs.args != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ubc ${{ inputs.args }}
 
 

@@ -11,12 +11,13 @@ It supports caching the `ubc` binary to speed up workflow runs.
 
 The following inputs can be used to configure the action:
 
-| Input               | Description                                                                          | Default     | Required |
-| ------------------- | ------------------------------------------------------------------------------------ | ----------- | -------- |
-| `version`           | The version of the `ubc` CLI to install. Use `latest` for the latest version.        | `0.19.0`    | No       |
-| `license-key`       | The ubCode license key. Recommended to be passed via secrets.                        | `''`        | No       |
-| `license-user`      | The ubCode license user. Recommended to be passed via secrets.                       | `''`        | No       |
-| `working-directory` | The working directory to run the `ubc` command in. Defaults to the repository root.  | `.`         | No       |
+| Input               | Description                                                                          | Default                  | Required |
+| ------------------- | ------------------------------------------------------------------------------------ | ------------------------ | -------- |
+| `args`              | Arguments to pass to the ubc command. If provided, ubc will be invoked immediately.  | `''`                     | No       |
+| `version`           | The version of the `ubc` CLI to install. Use `latest` for the latest version.        | `0.19.0`                 | No       |
+| `license-key`       | The ubCode license key. Recommended to be passed via secrets.                        | `''`                     | No       |
+| `license-user`      | The ubCode license user. Recommended to be passed via secrets.                       | `''`                     | No       |
+| `working-directory` | The working directory to run the `ubc` command in. Defaults to the repository root.  | `${{ github.workspace }}`| No       |
 
 Note: For private projects setting `license-key` and `license-user` is required.
 
@@ -52,6 +53,10 @@ jobs:
         working-directory: ./demo
         run: ubc check .
 ```
+
+## Known Limitations
+
+Windows and macOS runners are not supported at the moment. This action only supports Linux runners.
 
 ## License
 
