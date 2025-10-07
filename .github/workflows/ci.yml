@@ -1,0 +1,21 @@
+---
+name: Workflow for ubc action
+on: [push, pull_request]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+        with:
+          submodules: "true"
+
+      - name: Setup ubc
+        uses: ./
+
+      - name: Verify ubc is installed
+        run: ubc --version

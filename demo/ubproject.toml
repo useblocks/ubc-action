@@ -1,0 +1,25 @@
+"$schema" = "https://ubcode.useblocks.com/ubproject.schema.json"
+
+[scripts]
+# requires installed https://docs.astral.sh/uv
+sphinx = "uv run --no-project --with 'sphinx,sphinx-needs~=4.2' sphinx-build -W -b html . _build"
+rm_build = "rm -rf _build"
+"sphinx:clean" = { chain = ["rm_build", "sphinx"] }
+
+[[needs.types]]
+directive = "req"
+title = "Requirement"
+prefix = "REQ"
+
+[[needs.types]]
+directive = "test"
+title = "Test"
+prefix = "Test"
+
+[[needs.extra_links]]
+option = "tests"
+outgoing = "Tests"
+incoming = "Tested by"
+
+[needs]
+extra_options = [ "custom_option" ]

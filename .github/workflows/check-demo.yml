@@ -1,0 +1,26 @@
+---
+name: Check demo project with ubc action
+on: [push, pull_request]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+
+  check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+        with:
+          submodules: "true"
+
+      - name: Setup ubc
+        uses: ./
+        with:
+          license-key: ${{ secrets.UBC_LICENSE_KEY }}
+          license-user: ${{ secrets.UBC_LICENSE_USER }}
+
+      - name: Test action with default settings
+        working-directory: ./demo
+        run: ubc check .
