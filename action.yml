@@ -128,11 +128,10 @@ runs:
 
     # Step 8: Add the ubc binary to the system PATH (only if downloaded).
     # This makes the 'ubc' command available in subsequent steps of the job.
-    # ${{ github.action_path }} is the absolute path to the directory containing this action.yml file.
     - name: Add ubc to PATH
       if: steps.check-existing.outputs.ubc-exists != 'true'
       shell: bash
-      run: echo "${{ github.action_path }}" >> $GITHUB_PATH
+      run: echo "$PWD" >> $GITHUB_PATH
 
     # Step 9: Export license environment variables for subsequent steps
     # This makes the license available to any `ubc` command run later in the job.
